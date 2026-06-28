@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Summer Reading Marathon</title>
+  <title>Elliott's Summer Reading & Writing Marathon</title>
   <link rel="stylesheet" href="styles.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
@@ -12,8 +12,8 @@
     <main class="card">
       <div class="card-head">
         <div>
-          <h1>Summer Reading Marathon</h1>
-          <p class="muted" id="datesText">2026-06-28 — 2026-09-10 (configurable)</p>
+          <h1>Elliott's Summer Reading &amp; Writing Marathon</h1>
+          <p class="muted" id="datesText">2026-06-28 — 2026-09-10</p>
         </div>
         <div class="totals">
           <div class="total-item">
@@ -51,26 +51,25 @@
               <div id="daysValue">0 / 0</div>
             </div>
             <div class="meta">
-              <div class="label">Target so far</div>
+              <div class="label">Goal (whole summer)</div>
               <div id="targetSoFar">— min</div>
             </div>
           </div>
 
           <div class="actions">
             <button id="btnLog" class="btn primary">Log minutes</button>
-            <button id="btnPledge" class="btn">Pledge (¢/min)</button>
-            <button id="btnExport" class="btn ghost">Export CSV</button>
+            <button id="btnPledge" class="btn">Pledge</button>
           </div>
 
           <div class="list-wrap">
-            <h4>Recent</h4>
+            <h4>Logs</h4>
             <ul id="recentLogs" class="list small-muted"></ul>
           </div>
 
           <div class="calculator" style="margin-top:12px;background:rgba(255,255,255,0.02);padding:12px;border-radius:10px">
-            <div class="label">Pledge rate (fixed)</div>
-            <div style="font-weight:700;margin-top:6px">$0.01 per minute</div>
-            <div style="margin-top:8px;color:var(--muted);font-size:13px">Estimated payout for full challenge:</div>
+            <div class="label">Pledge options</div>
+            <div style="margin-top:6px;color:var(--muted);font-size:13px">Fixed per-minute pledge: $0.01 / minute</div>
+            <div style="margin-top:8px;color:var(--muted);font-size:13px">Estimated payout for full challenge (all per-minute pledges):</div>
             <div id="estimatedPayout" style="font-size:16px;font-weight:700;margin-top:6px">$0.00</div>
           </div>
 
@@ -88,6 +87,10 @@
         <label>Read<input type="number" id="logRead" min="0"></label>
         <label>Write<input type="number" id="logWrite" min="0"></label>
       </div>
+      <div class="row">
+        <label>Pages read<input id="logPages" type="number" min="0" placeholder="pages"></label>
+        <label>Book<input id="logBook" type="text" placeholder="Title (optional)"></label>
+      </div>
       <label>Notes<input id="logNotes" type="text" placeholder="Optional note"></label>
       <div class="modal-actions">
         <button class="btn" id="logCancel">Cancel</button>
@@ -96,13 +99,29 @@
     </form>
   </div>
 
-  <!-- Pledge modal (fixed 1¢/min) -->
+  <!-- Pledge modal (per-minute fixed and flat fee option) -->
   <div id="modalPledge" class="modal hidden" aria-hidden="true">
     <form class="modal-card" onsubmit="return false">
-      <h3>Pledge — $0.01 / minute</h3>
-      <p class="small-muted">This pledge will be recorded as a $0.01 per-minute pledge. You'll be contacted after the challenge to arrange payment.</p>
-      <label>Name<input id="pledgeName" type="text" placeholder="Your name"></label>
-      <label>Email<input id="pledgeEmail" type="email" placeholder="Optional"></label>
+      <h3>Pledge</h3>
+      <p class="small-muted">Choose a per-minute pledge at $0.01/min or make a one-time flat pledge.</p>
+
+      <div class="row" style="margin-top:8px;">
+        <label class="radio"><input type="radio" name="pledgeType" value="permin" checked> Per-minute ($0.01/min)</label>
+        <label class="radio"><input type="radio" name="pledgeType" value="flat"> Flat amount</label>
+      </div>
+
+      <div id="perMinRow" style="margin-top:8px;">
+        <label>Donor name (optional)<input id="pledgeName" type="text" placeholder="Your name"></label>
+        <label>Email (optional)<input id="pledgeEmail" type="email" placeholder="you@example.com"></label>
+        <div class="small-muted" style="margin-top:6px">Per-minute rate is fixed at $0.01/min.</div>
+      </div>
+
+      <div id="flatRow" class="hidden" style="margin-top:8px;">
+        <label>Donor name (optional)<input id="pledgeNameFlat" type="text" placeholder="Your name"></label>
+        <label>Email (optional)<input id="pledgeEmailFlat" type="email" placeholder="you@example.com"></label>
+        <label>Amount (USD)<input id="pledgeAmount" type="number" min="0" step="0.01" value="10"></label>
+      </div>
+
       <div class="modal-actions">
         <button class="btn" id="pledgeCancel">Cancel</button>
         <button class="btn primary" id="pledgeSave">Confirm pledge</button>
