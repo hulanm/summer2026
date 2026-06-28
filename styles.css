@@ -22,14 +22,16 @@ html,body{height:100%;margin:0;background:linear-gradient(180deg,#061026 0%, #07
 
 .progress-area{display:flex;gap:18px;align-items:center}
 .progress-left{width:220px;display:flex;align-items:center;justify-content:center}
-.meter{width:180px;height:180px;display:flex;align-items:center;justify-content:center;position:relative}
+/* add bottom padding so legend can sit visually below the chart */
+.meter{width:180px;height:180px;display:flex;align-items:center;justify-content:center;position:relative;padding-bottom:18px}
 .circular-chart{width:160px;height:160px}
 .circle-bg{fill:none;stroke:#071829;stroke-width:3.8}
 .circle{fill:none; stroke-width:3.8; stroke-linecap:round; transform: rotate(-90deg); transform-origin: center; transition: stroke-dasharray 500ms ease, stroke-dashoffset 500ms ease}
 .circle-read{stroke: url(#gradRead)}
 .circle-write{stroke: url(#gradWrite)}
 .chart-text{fill:#e6eef8;font-size:12px;text-anchor:middle;font-weight:700}
-.legend{position:absolute;bottom:8px;left:8px;display:flex;gap:8px;align-items:center}
+/* move legend a little lower so it doesn't overlap the chart image */
+.legend{position:absolute;bottom:-14px;left:8px;display:flex;gap:8px;align-items:center;z-index:2}
 .legend-item{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
 .swatch{width:10px;height:10px;border-radius:2px}
 .swatch.read{background:linear-gradient(90deg,#9b5cff,#7c5cff)}
@@ -71,4 +73,6 @@ html,body{height:100%;margin:0;background:linear-gradient(180deg,#061026 0%, #07
   .progress-right{width:100%}
   .modal-card{width:94vw;max-width:94vw;padding:14px}
   .list li{font-size:15px}
+  /* on small screens place legend below the chart so it never overlaps */
+  .legend{position:static;margin-top:8px}
 }
