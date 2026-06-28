@@ -328,7 +328,41 @@
     window.open(mailto)
   }
 
-  function escapeHtml(s) { return (s||'').replace(/[&<>\"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[m])) }
+  function escapeHtml(s) { return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) }
+
+  // Fetch server logs, merge into localStorage (id-based dedupe)
+  async function fetchServerLogs(){
+    try {
+      const res = await fetch('/.netlify/functions/logs');
+      if (!res.ok) return;
+      const serverLogs = await res.json();
+      if (!Array.isArray(serverLogs) || serverLogs.length === 0) return;
+
+      const local = load(KEY_LOGS);
+      const ids = new Set(local.map(l => String(l.id || (l.date + '::' + (l.read||0) + '::' + (l.write||0)))));
+      for (const s of serverLogs){
+        const sid = String(s.id || (s.date + '::' + (s.read||0) + '::' + (s.write||0)));
+        if (!ids.has(sid)){
+          const entry = {
+            id: s.id || Date.now() + Math.floor(Math.random()*1000),
+            date: s.date,
+            read: s.read || 0,
+            write: s.write || 0,
+            pages: s.pages === undefined ? null : s.pages,
+            book: s.book || '',
+            notes: s.notes || '',
+            updatedAt: s.updated_at || s.updatedAt || new Date().toISOString()
+          };
+          local.push(entry);
+          ids.add(sid);
+        }
+      }
+      local.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
+      save(KEY_LOGS, local);
+    } catch (e) {
+      console.warn('fetchServerLogs failed', e);
+    }
+  }
 
   // migration helper: upload localStorage entries to server (best-effort). Run in console: window.__sr.migrateToServer()
   async function migrateToServer(){
@@ -344,6 +378,11 @@
     alert('Migration attempted — check console for results.')
   }
 
-  window.__sr = { compute, render, load, save, migrateToServer }
-  render()
+  window.__sr = { compute, render, load, save, migrateToServer, fetchServerLogs }
+
+  // Use server logs first, then render
+  (async () => {
+    await fetchServerLogs();
+    render();
+  })();
 })();
