@@ -1,9 +1,12 @@
-// script.js - updated: dual-arc read/write donut display
+// script.js - updated: allow editing/deleting pledges, show donor names publicly, donor-voice mailto, fix rendering/logging
 (() => {
   const CONFIG = { startDate: '2026-06-28', endDate: '2026-09-10' }
   const KEY_LOGS = 'sr_logs_v3'
   const KEY_PLEDGES = 'sr_pledges_v3'
   const PLEDGE_RATE = 0.01 // fixed $0.01 per minute
+
+  // Parents for mailto (if used)
+  const PARENT_EMAILS = ['michellehulan@gmail.com','joelwkodish@gmail.com']
 
   const $ = s => document.querySelector(s), $all = s => [...document.querySelectorAll(s)]
   const todayISO = () => new Date().toISOString().slice(0,10)
@@ -45,6 +48,8 @@
     flatRow: $('#flatRow')
   }
 
+  let editingPledgeId = null // when editing an existing pledge
+
   const load = (k) => JSON.parse(localStorage.getItem(k) || '[]')
   const save = (k,v) => localStorage.setItem(k, JSON.stringify(v))
 
@@ -59,10 +64,10 @@
   refs.logBook.value = ''
   refs.pledgeAmount.value = 10
 
-  refs.btnLog.onclick = () => openModal(refs.modalLog)
-  refs.btnPledge.onclick = () => openModal(refs.modalPledge)
+  refs.btnLog.onclick = () => { editingPledgeId = null; openModal(refs.modalLog) }
+  refs.btnPledge.onclick = () => { editingPledgeId = null; clearPledgeForm(); openModal(refs.modalPledge) }
   $('#logCancel').onclick = () => closeModal(refs.modalLog)
-  $('#pledgeCancel').onclick = () => closeModal(refs.modalPledge)
+  $('#pledgeCancel').onclick = () => { editingPledgeId = null; closeModal(refs.modalPledge) }
   $('#logSave').onclick = saveLog
   $('#pledgeSave').onclick = savePledge
 
@@ -71,41 +76,82 @@
     else { refs.perMinRow.classList.add('hidden'); refs.flatRow.classList.remove('hidden') }
   })
 
+  function clearPledgeForm(){
+    // reset form fields
+    refs.pledgeName.value = ''
+    refs.pledgeEmail.value = ''
+    refs.pledgeNameFlat.value = ''
+    refs.pledgeEmailFlat.value = ''
+    refs.pledgeAmount.value = 10
+    document.querySelector('input[name="pledgeType"][value="permin"]').checked = true
+    refs.perMinRow.classList.remove('hidden'); refs.flatRow.classList.add('hidden')
+  }
+
   function saveLog(){
-    const date = refs.logDate.value
-    const read = Math.max(0, Number(refs.logRead.value||0))
-    const write = Math.max(0, Number(refs.logWrite.value||0))
-    const pages = refs.logPages.value ? Math.max(0, Number(refs.logPages.value)) : null
-    const book = refs.logBook.value ? refs.logBook.value.trim() : ''
-    const notes = refs.logNotes.value ? refs.logNotes.value.trim() : ''
-    if (!date) return alert('Pick a date')
-    let logs = load(KEY_LOGS)
-    const idx = logs.findIndex(l=>l.date===date)
-    const entry = { date, read, write, pages, book, notes, updatedAt: new Date().toISOString() }
-    if (idx >= 0) logs[idx] = entry; else logs.push(entry)
-    logs.sort((a,b)=>b.date.localeCompare(a.date))
-    save(KEY_LOGS, logs)
-    closeModal(refs.modalLog); render()
+    try {
+      const date = refs.logDate.value
+      const read = Math.max(0, Number(refs.logRead.value||0))
+      const write = Math.max(0, Number(refs.logWrite.value||0))
+      const pages = refs.logPages.value ? Math.max(0, Number(refs.logPages.value)) : null
+      const book = refs.logBook.value ? refs.logBook.value.trim() : ''
+      const notes = refs.logNotes.value ? refs.logNotes.value.trim() : ''
+      if (!date) return alert('Pick a date')
+      let logs = load(KEY_LOGS)
+      const idx = logs.findIndex(l=>l.date===date)
+      const entry = { date, read, write, pages, book, notes, updatedAt: new Date().toISOString() }
+      if (idx >= 0) logs[idx] = entry; else logs.push(entry)
+      logs.sort((a,b)=>b.date.localeCompare(a.date))
+      save(KEY_LOGS, logs)
+      closeModal(refs.modalLog); render()
+    } catch (e) {
+      console.error('saveLog error', e); alert('Error saving log. Check console for details.')
+    }
   }
 
   function savePledge(){
-    const type = document.querySelector('input[name="pledgeType"]:checked').value
-    const pledges = load(KEY_PLEDGES)
-    let pledge = null
-    if (type === 'permin'){
-      const name = refs.pledgeName.value.trim() || 'Anonymous'
-      const email = refs.pledgeEmail.value.trim()
-      pledge = { id: Date.now(), name, email, type: 'permin', rate: PLEDGE_RATE, createdAt: new Date().toISOString() }
-    } else {
-      const name = refs.pledgeNameFlat.value.trim() || 'Anonymous'
-      const email = refs.pledgeEmailFlat.value.trim()
-      const amount = Number(refs.pledgeAmount.value || 0)
-      if (amount <= 0) return alert('Enter an amount for flat pledge')
-      pledge = { id: Date.now(), name, email, type: 'flat', amount, createdAt: new Date().toISOString() }
+    try {
+      const type = document.querySelector('input[name="pledgeType"]:checked').value
+      let pledges = load(KEY_PLEDGES)
+      let pledge = null
+      if (type === 'permin'){
+        const name = refs.pledgeName.value.trim() || 'Anonymous'
+        const email = refs.pledgeEmail.value.trim()
+        pledge = { id: editingPledgeId || Date.now(), name, email, type: 'permin', rate: PLEDGE_RATE, createdAt: new Date().toISOString() }
+      } else {
+        const name = refs.pledgeNameFlat.value.trim() || 'Anonymous'
+        const email = refs.pledgeEmailFlat.value.trim()
+        const amount = Number(refs.pledgeAmount.value || 0)
+        if (amount <= 0) return alert('Enter an amount for flat pledge')
+        pledge = { id: editingPledgeId || Date.now(), name, email, type: 'flat', amount, createdAt: new Date().toISOString() }
+      }
+
+      if (editingPledgeId) {
+        // update existing
+        const idx = pledges.findIndex(p => p.id === editingPledgeId)
+        if (idx >= 0) pledges[idx] = pledge
+      } else {
+        pledges.push(pledge)
+      }
+      save(KEY_PLEDGES, pledges)
+      editingPledgeId = null
+      closeModal(refs.modalPledge); render()
+    } catch (e) {
+      console.error('savePledge error', e); alert('Error saving pledge. Check console for details.')
     }
-    pledges.push(pledge)
-    save(KEY_PLEDGES, pledges)
-    closeModal(refs.modalPledge); render()
+  }
+
+  function composeDonorVoiceBody(p){
+    const name = p.name || 'A supporter'
+    const typeLine = p.type === 'flat' ? `Flat — ${formatCurrency(p.amount||0)}` : `Per-minute at $${(p.rate||0).toFixed(2)}/min (estimated full pledge: ${formatCurrency(Number(p.rate||0) * (totalDays * 30))})`
+    return `Hi Joel & Michelle,%0D%0A%0D%0AMy name is ${encodeURIComponent(name)} and I just pledged to support Elliott's Summer Reading & Writing Marathon.%0D%0A%0D%0APledge details:%0D%0A- ${typeLine}%0D%0A- Donor email: ${encodeURIComponent(p.email || 'n/a')}%0D%0A%0D%0AI thought this would be a fun way to help keep him motivated as he starts middle school. You can follow his daily updates here: https://hulanm.github.io/summer2026/%0D%0A%0D%0ABest wishes,%0D%0A${encodeURIComponent(name)}`
+  }
+
+  function openMailtoForPledge(p){
+    const parents = PARENT_EMAILS.join(',')
+    const subject = encodeURIComponent(`Elliott — I just made a pledge to support your summer reading!`)
+    const body = composeDonorVoiceBody(p)
+    const mailto = `mailto:${parents}?subject=${subject}&body=${body}`
+    window.open(mailto)
   }
 
   function compute(){
@@ -132,71 +178,109 @@
   }
 
   function render(){
-    const { logs, pledges, totalMinutes, totalRead, totalWrite, elapsed, targetSoFar, pledgedEstimate, fullChallengePayout } = compute()
-    refs.daysValue.textContent = `${elapsed} / ${totalDays}`
-    refs.totalMinutes.textContent = totalMinutes
-    refs.pledgedValue.textContent = formatCurrency(pledgedEstimate)
-    refs.targetSoFar.textContent = `${targetSoFar} min`
-    refs.estimatedPayout.textContent = formatCurrency(fullChallengePayout)
+    try {
+      const { logs, pledges, totalMinutes, totalRead, totalWrite, elapsed, targetSoFar, pledgedEstimate, fullChallengePayout } = compute()
+      refs.daysValue.textContent = `${elapsed} / ${totalDays}`
+      refs.totalMinutes.textContent = totalMinutes
+      refs.pledgedValue.textContent = formatCurrency(pledgedEstimate)
+      refs.targetSoFar.textContent = `${targetSoFar} min`
+      refs.estimatedPayout.textContent = formatCurrency(fullChallengePayout)
 
-    // update donut: read vs write share (proportional to logged minutes)
-    if (totalMinutes <= 0){
-      refs.progressArcRead.setAttribute('stroke-dasharray', `0,100`)
-      refs.progressArcWrite.setAttribute('stroke-dasharray', `0,100`)
-    } else {
-      const readShare = Math.round((totalRead / totalMinutes) * 100)
-      const writeShare = 100 - readShare
-      refs.progressArcRead.setAttribute('stroke-dasharray', `${readShare},100`)
-      // offset the second arc so it starts after the first arc
-      refs.progressArcWrite.setAttribute('stroke-dasharray', `${writeShare},100`)
-      refs.progressArcWrite.setAttribute('stroke-dashoffset', `${-readShare}`)
+      // update donut
+      if (totalMinutes <= 0){
+        refs.progressArcRead.setAttribute('stroke-dasharray', `0,100`)
+        refs.progressArcWrite.setAttribute('stroke-dasharray', `0,100`)
+      } else {
+        const readShare = Math.round((totalRead / totalMinutes) * 100)
+        const writeShare = 100 - readShare
+        refs.progressArcRead.setAttribute('stroke-dasharray', `${readShare},100`)
+        refs.progressArcWrite.setAttribute('stroke-dasharray', `${writeShare},100`)
+        refs.progressArcWrite.setAttribute('stroke-dashoffset', `${-readShare}`)
+      }
+      const percent = targetSoFar > 0 ? Math.round((totalMinutes / targetSoFar) * 100) : 0
+      refs.progressPercent.textContent = `${Math.min(100, percent)}%`
+
+      // render logs (build DOM to avoid template issues)
+      const ul = refs.recentLogs; ul.innerHTML = ''
+      if (!logs || logs.length === 0){
+        const li = document.createElement('li'); li.className = 'small-muted'; li.textContent = 'No logs yet — click "Log minutes" to add today\'s entry.'; ul.appendChild(li)
+      } else {
+        logs.slice(0,50).forEach(l => {
+          const total = (Number(l.read||0) + Number(l.write||0))
+          const li = document.createElement('li')
+
+          const top = document.createElement('div'); top.style.display='flex'; top.style.justifyContent='space-between'; top.style.alignItems='center'
+          const strong = document.createElement('strong'); strong.textContent = l.date
+          const totalDiv = document.createElement('div'); totalDiv.style.fontWeight = '700'; totalDiv.textContent = `${total} min`
+          top.appendChild(strong); top.appendChild(totalDiv)
+
+          const meta = document.createElement('div'); meta.className='row-meta'
+          meta.innerHTML = `<div>Read: ${l.read} min</div><div>Write: ${l.write} min</div><div>Pages: ${l.pages !== null && l.pages !== undefined ? l.pages : '—'}</div><div>Book: ${l.book ? escapeHtml(l.book) : '—'}</div>`
+
+          const note = document.createElement('div'); note.className='small-muted'; note.style.marginTop='6px'; note.innerHTML = escapeHtml(l.notes || '')
+
+          const actions = document.createElement('div'); actions.style.marginTop='6px'
+          const editBtn = document.createElement('button'); editBtn.className='tiny'; editBtn.dataset.date = l.date; editBtn.textContent='Edit'
+          editBtn.onclick = () => openEdit(l.date)
+          const delBtn = document.createElement('button'); delBtn.className='tiny del'; delBtn.dataset.date = l.date; delBtn.textContent='Delete'
+          delBtn.onclick = () => { if (!confirm('Delete this log?')) return; const date = l.date; let arr = load(KEY_LOGS).filter(x => x.date !== date); save(KEY_LOGS, arr); render() }
+          actions.appendChild(editBtn); actions.appendChild(delBtn)
+
+          li.appendChild(top); li.appendChild(meta); li.appendChild(note); li.appendChild(actions)
+          ul.appendChild(li)
+        })
+      }
+
+      // render donors (public names now required)
+      const dl = refs.donorList; dl.innerHTML = ''
+      if (!pledges || pledges.length === 0){
+        const li = document.createElement('li'); li.className='small-muted'; li.textContent = 'No pledges yet — be the first to pledge!'; dl.appendChild(li)
+      } else {
+        pledges.slice().reverse().forEach(p => {
+          const li = document.createElement('li')
+          const top = document.createElement('div'); top.style.display='flex'; top.style.justifyContent='space-between'; top.style.alignItems='center'
+          const name = document.createElement('strong'); name.textContent = escapeHtml(p.name || 'Anonymous')
+          const right = document.createElement('div'); right.style.fontWeight='700'
+          if (p.type === 'flat') right.textContent = formatCurrency(Number(p.amount||0))
+          else right.textContent = `Per-minute · ${formatCurrency(Number(p.rate||0))}/min`
+          top.appendChild(name); top.appendChild(right)
+
+          const meta = document.createElement('div'); meta.className='small-muted'; meta.style.marginTop='6px'
+          if (p.type === 'flat') meta.textContent = `Flat pledge · ${new Date(p.createdAt).toLocaleString()}`
+          else meta.textContent = `Estimated full pledge if Elliott completes the challenge: ${formatCurrency(Number(p.rate||0) * (totalDays * 30))} · ${new Date(p.createdAt).toLocaleString()}`
+
+          const actions = document.createElement('div'); actions.style.marginTop='8px'
+          const edit = document.createElement('button'); edit.className='tiny'; edit.textContent='Edit'; edit.onclick = () => editPledge(p.id)
+          const del = document.createElement('button'); del.className='tiny del'; del.textContent='Delete'; del.onclick = () => { if(!confirm('Delete this pledge?')) return; const arr = load(KEY_PLEDGES).filter(x=>x.id !== p.id); save(KEY_PLEDGES, arr); render() }
+          const mail = document.createElement('button'); mail.className='tiny'; mail.textContent='Email parents'; mail.onclick = () => openMailtoForPledge(p)
+          actions.appendChild(edit); actions.appendChild(del); actions.appendChild(mail)
+
+          li.appendChild(top); li.appendChild(meta); li.appendChild(actions)
+          dl.appendChild(li)
+        })
+      }
+    } catch (e) {
+      console.error('render error', e); const ul = refs.recentLogs; ul.innerHTML = '<li class="small-muted">An error occurred — check console.</li>'
     }
+  }
 
-    // center percent = progress toward whole-summer goal
-    const percent = targetSoFar > 0 ? Math.round((totalMinutes / targetSoFar) * 100) : 0
-    refs.progressPercent.textContent = `${Math.min(100, percent)}%`
-
-    // render logs
-    const ul = refs.recentLogs; ul.innerHTML = ''
-    if (logs.length === 0){
-      ul.innerHTML = '<li class="small-muted">No logs yet — click "Log minutes" to add today\'s entry.</li>'
+  function editPledge(id){
+    const pledges = load(KEY_PLEDGES)
+    const p = pledges.find(x => x.id === id); if (!p) return alert('Pledge not found')
+    editingPledgeId = id
+    if (p.type === 'flat'){
+      document.querySelector('input[name="pledgeType"][value="flat"]').checked = true
+      refs.perMinRow.classList.add('hidden'); refs.flatRow.classList.remove('hidden')
+      refs.pledgeNameFlat.value = p.name || ''
+      refs.pledgeEmailFlat.value = p.email || ''
+      refs.pledgeAmount.value = p.amount || 0
     } else {
-      logs.slice(0,50).forEach(l => {
-        const total = (Number(l.read||0) + Number(l.write||0))
-        const li = document.createElement('li')
-        li.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><strong>${l.date}</strong><div style="font-weight:700">${total} min</div></div>
-          <div class="row-meta"><div>Read: ${l.read} min</div><div>Write: ${l.write} min</div><div>Pages: ${l.pages !== null && l.pages !== undefined ? l.pages : '—'}</div><div>Book: ${l.book ? escapeHtml(l.book) : '—'}</div></div>
-          <div class="small-muted" style="margin-top:6px">${escapeHtml(l.notes || '')}</div>
-          <div style="margin-top:6px"><button class="tiny" data-date="${l.date}">Edit</button> <button class="tiny del" data-date="${l.date}">Delete</button></div>`
-        ul.appendChild(li)
-      })
-      ul.querySelectorAll('button.tiny').forEach(b => b.onclick = e => openEdit(e.target.dataset.date))
-      ul.querySelectorAll('button.del').forEach(b => b.onclick = e => {
-        if (!confirm('Delete this log?')) return
-        const date = e.target.dataset.date
-        let arr = load(KEY_LOGS).filter(x => x.date !== date)
-        save(KEY_LOGS, arr); render()
-      })
+      document.querySelector('input[name="pledgeType"][value="permin"]').checked = true
+      refs.perMinRow.classList.remove('hidden'); refs.flatRow.classList.add('hidden')
+      refs.pledgeName.value = p.name || ''
+      refs.pledgeEmail.value = p.email || ''
     }
-
-    // render donors (no emails shown publicly)
-    const dl = refs.donorList; dl.innerHTML = ''
-    if (pledges.length === 0){
-      dl.innerHTML = '<li class="small-muted">No pledges yet — be the first to pledge!</li>'
-    } else {
-      pledges.slice().reverse().forEach(p => {
-        const li = document.createElement('li')
-        if (p.type === 'flat'){
-          li.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><strong>${escapeHtml(p.name||'Anonymous')}</strong><div style="font-weight:700">${formatCurrency(Number(p.amount||0))}</div></div>
-            <div class="small-muted" style="margin-top:6px">Flat pledge · ${new Date(p.createdAt).toLocaleString()}</div>`
-        } else {
-          const full = Number(p.rate||0) * (totalDays * 30)
-          li.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><strong>${escapeHtml(p.name||'Anonymous')}</strong><div style="font-weight:700">Per-minute · ${formatCurrency(Number(p.rate||0))}/min</div></div>
-            <div class="small-muted" style="margin-top:6px">Estimated full pledge if Elliott completes the challenge: ${formatCurrency(full)} · ${new Date(p.createdAt).toLocaleString()}</div>`
-        }
-        dl.appendChild(li)
-      })
-    }
+    openModal(refs.modalPledge)
   }
 
   function openEdit(date){
