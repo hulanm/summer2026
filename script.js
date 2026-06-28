@@ -1,12 +1,9 @@
-// script.js - updated: stores pages & book; removes export; modal notifications; mobile-friendly
+// script.js - updated: dual-arc read/write donut display
 (() => {
   const CONFIG = { startDate: '2026-06-28', endDate: '2026-09-10' }
   const KEY_LOGS = 'sr_logs_v3'
   const KEY_PLEDGES = 'sr_pledges_v3'
   const PLEDGE_RATE = 0.01 // fixed $0.01 per minute
-
-  // Parents' emails for notification
-  const PARENT_EMAILS = ['michellehulan@gmail.com','joelwkodish@gmail.com']
 
   const $ = s => document.querySelector(s), $all = s => [...document.querySelectorAll(s)]
   const todayISO = () => new Date().toISOString().slice(0,10)
@@ -22,10 +19,12 @@
     daysValue: $('#daysValue'),
     totalMinutes: $('#totalMinutes'),
     pledgedValue: $('#pledgedValue'),
-    progressArc: $('#progressArc'),
+    progressArcRead: $('#progressArcRead'),
+    progressArcWrite: $('#progressArcWrite'),
     progressPercent: $('#progressPercent'),
     targetSoFar: $('#targetSoFar'),
     recentLogs: $('#recentLogs'),
+    donorList: $('#donorList'),
     btnLog: $('#btnLog'),
     btnPledge: $('#btnPledge'),
     modalLog: $('#modalLog'),
@@ -106,28 +105,15 @@
     }
     pledges.push(pledge)
     save(KEY_PLEDGES, pledges)
-    try { sendNotificationEmails(pledge) } catch(e){ console.warn('Email helper failed', e) }
     closeModal(refs.modalPledge); render()
-  }
-
-  function sendNotificationEmails(pledge){
-    const donorEmail = pledge.email
-    const parents = PARENT_EMAILS.join(',')
-    const subject = encodeURIComponent("WOW — Thanks for supporting Elliott's summer reading!")
-    const bodyText = `WOW, thank you so much for supporting Elliott's reading and writing summer!\n\nWe thought this was a fun way to help keep him motivated, so he can enter middle school without any learning leaks!\n\nTo keep track of his progress, you can always come back to his page: https://hulanm.github.io/summer2026/\n\nHe'll be updating it every day.\n\nSincerely,\nJoel & Michelle\n\nPledge details:\nType: ${pledge.type === 'permin' ? '$0.01 per minute' : 'Flat'}\n${pledge.type === 'flat' ? `Amount: $${(pledge.amount||0).toFixed(2)}\n` : ''}Donor: ${pledge.name || 'Anonymous'}\nEmail: ${pledge.email || 'n/a'}`
-    const body = encodeURIComponent(bodyText)
-    const mailtoParents = `mailto:${parents}?subject=${subject}&body=${body}`
-    window.open(mailtoParents)
-    if (donorEmail){
-      const mailtoDonor = `mailto:${encodeURIComponent(donorEmail)}?subject=${subject}&body=${body}`
-      window.open(mailtoDonor)
-    }
   }
 
   function compute(){
     const logs = load(KEY_LOGS)
     const inRange = logs.filter(l => l.date >= start && l.date <= end)
-    const totalMinutes = inRange.reduce((s,l)=>s + Number(l.read||0) + Number(l.write||0), 0)
+    const totalRead = inRange.reduce((s,l)=>s + Number(l.read||0), 0)
+    const totalWrite = inRange.reduce((s,l)=>s + Number(l.write||0), 0)
+    const totalMinutes = totalRead + totalWrite
     const now = new Date().toISOString().slice(0,10)
     const elapsedEnd = now < start ? start : (now > end ? end : now)
     const elapsed = elapsedEnd < start ? 0 : inclusiveDays(start, elapsedEnd)
@@ -142,20 +128,35 @@
       if (p.type === 'flat') return acc + Number(p.amount || 0)
       return acc + (Number(p.rate || 0) * fullChallengeMinutes)
     }, 0)
-    return { logs, pledges, totalMinutes, elapsed, targetSoFar, pledgedEstimate, fullChallengePayout }
+    return { logs, pledges, totalMinutes, totalRead, totalWrite, elapsed, targetSoFar, pledgedEstimate, fullChallengePayout }
   }
 
   function render(){
-    const { logs, pledges, totalMinutes, elapsed, targetSoFar, pledgedEstimate, fullChallengePayout } = compute()
+    const { logs, pledges, totalMinutes, totalRead, totalWrite, elapsed, targetSoFar, pledgedEstimate, fullChallengePayout } = compute()
     refs.daysValue.textContent = `${elapsed} / ${totalDays}`
     refs.totalMinutes.textContent = totalMinutes
     refs.pledgedValue.textContent = formatCurrency(pledgedEstimate)
     refs.targetSoFar.textContent = `${targetSoFar} min`
     refs.estimatedPayout.textContent = formatCurrency(fullChallengePayout)
+
+    // update donut: read vs write share (proportional to logged minutes)
+    if (totalMinutes <= 0){
+      refs.progressArcRead.setAttribute('stroke-dasharray', `0,100`)
+      refs.progressArcWrite.setAttribute('stroke-dasharray', `0,100`)
+    } else {
+      const readShare = Math.round((totalRead / totalMinutes) * 100)
+      const writeShare = 100 - readShare
+      refs.progressArcRead.setAttribute('stroke-dasharray', `${readShare},100`)
+      // offset the second arc so it starts after the first arc
+      refs.progressArcWrite.setAttribute('stroke-dasharray', `${writeShare},100`)
+      refs.progressArcWrite.setAttribute('stroke-dashoffset', `${-readShare}`)
+    }
+
+    // center percent = progress toward whole-summer goal
     const percent = targetSoFar > 0 ? Math.round((totalMinutes / targetSoFar) * 100) : 0
-    refs.progressArc.setAttribute('stroke-dasharray', `${Math.min(100, percent)},100`)
     refs.progressPercent.textContent = `${Math.min(100, percent)}%`
 
+    // render logs
     const ul = refs.recentLogs; ul.innerHTML = ''
     if (logs.length === 0){
       ul.innerHTML = '<li class="small-muted">No logs yet — click "Log minutes" to add today\'s entry.</li>'
@@ -177,6 +178,25 @@
         save(KEY_LOGS, arr); render()
       })
     }
+
+    // render donors (no emails shown publicly)
+    const dl = refs.donorList; dl.innerHTML = ''
+    if (pledges.length === 0){
+      dl.innerHTML = '<li class="small-muted">No pledges yet — be the first to pledge!</li>'
+    } else {
+      pledges.slice().reverse().forEach(p => {
+        const li = document.createElement('li')
+        if (p.type === 'flat'){
+          li.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><strong>${escapeHtml(p.name||'Anonymous')}</strong><div style="font-weight:700">${formatCurrency(Number(p.amount||0))}</div></div>
+            <div class="small-muted" style="margin-top:6px">Flat pledge · ${new Date(p.createdAt).toLocaleString()}</div>`
+        } else {
+          const full = Number(p.rate||0) * (totalDays * 30)
+          li.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><strong>${escapeHtml(p.name||'Anonymous')}</strong><div style="font-weight:700">Per-minute · ${formatCurrency(Number(p.rate||0))}/min</div></div>
+            <div class="small-muted" style="margin-top:6px">Estimated full pledge if Elliott completes the challenge: ${formatCurrency(full)} · ${new Date(p.createdAt).toLocaleString()}</div>`
+        }
+        dl.appendChild(li)
+      })
+    }
   }
 
   function openEdit(date){
@@ -186,9 +206,7 @@
     openModal(refs.modalLog)
   }
 
-  function exportCSV(){ /* export removed per request */ }
-
-  function escapeHtml(s) { return (s||'').replace(/[&<>"]/, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])) }
+  function escapeHtml(s) { return (s||'').replace(/[&<>\"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[m])) }
 
   window.__sr = { compute, render, load, save }
   render()

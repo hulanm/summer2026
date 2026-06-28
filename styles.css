@@ -1,4 +1,4 @@
-/* styles.css - slick minimal style (updated: opaque modals, improved mobile) */
+/* styles.css - updates for dual-arc chart */
 :root{
   --bg:#0f172a;
   --card:#0b1220;
@@ -21,12 +21,19 @@ html,body{height:100%;margin:0;background:linear-gradient(180deg,#061026 0%, #07
 .big{font-weight:700;font-size:18px}
 
 .progress-area{display:flex;gap:18px;align-items:center}
-.progress-left{width:200px;display:flex;align-items:center;justify-content:center}
-.meter{width:160px;height:160px;display:flex;align-items:center;justify-content:center}
+.progress-left{width:220px;display:flex;align-items:center;justify-content:center}
+.meter{width:180px;height:180px;display:flex;align-items:center;justify-content:center;position:relative}
 .circular-chart{width:160px;height:160px}
 .circle-bg{fill:none;stroke:#071829;stroke-width:3.8}
-.circle{fill:none;stroke: url(#grad); stroke-width:3.8; stroke-linecap:round; transform: rotate(-90deg); transform-origin: center; transition: stroke-dasharray 500ms ease;}
+.circle{fill:none; stroke-width:3.8; stroke-linecap:round; transform: rotate(-90deg); transform-origin: center; transition: stroke-dasharray 500ms ease, stroke-dashoffset 500ms ease}
+.circle-read{stroke: url(#gradRead)}
+.circle-write{stroke: url(#gradWrite)}
 .chart-text{fill:#e6eef8;font-size:12px;text-anchor:middle;font-weight:700}
+.legend{position:absolute;bottom:8px;left:8px;display:flex;gap:8px;align-items:center}
+.legend-item{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+.swatch{width:10px;height:10px;border-radius:2px}
+.swatch.read{background:linear-gradient(90deg,#9b5cff,#7c5cff)}
+.swatch.write{background:linear-gradient(90deg,#00d4ff,#56e6c2)}
 
 .progress-right{flex:1}
 .meta-row{display:flex;gap:18px;align-items:center;justify-content:space-between;margin-bottom:12px}
@@ -37,7 +44,6 @@ html,body{height:100%;margin:0;background:linear-gradient(180deg,#061026 0%, #07
 .btn{background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit;padding:10px 14px;border-radius:10px;cursor:pointer;transition:all .18s ease}
 .btn:hover{transform:translateY(-2px)}
 .btn.primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));border:none;color:#061026;font-weight:700;box-shadow:0 6px 18px rgba(124,92,255,0.14)}
-.btn.ghost{background:transparent;border:1px dashed rgba(255,255,255,0.04)}
 
 .list-wrap{margin-top:8px;background:var(--glass);padding:12px;border-radius:10px}
 .list{list-style:none;padding:0;margin:0}
@@ -46,7 +52,6 @@ html,body{height:100%;margin:0;background:linear-gradient(180deg,#061026 0%, #07
 
 .modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg, rgba(0,0,0,0.6), rgba(2,6,23,0.6));z-index:50}
 .hidden{display:none}
-/* fully opaque modal card */
 .modal-card{width:420px;background:#061226;padding:18px;border-radius:12px;border:1px solid rgba(255,255,255,0.04);box-shadow:0 18px 40px rgba(2,6,23,0.6)}
 .modal-card h3{margin:0 0 8px 0;color:#fff}
 .modal-card label{display:block;font-size:13px;color:var(--muted);margin-top:10px}
